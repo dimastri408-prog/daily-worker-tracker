@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Daily Worker Tracker</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SheetJS (Excel Export) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- jsPDF & AutoTable (PDF Export) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #e2e8f0;
+      margin: 0;
+      padding: 0;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .bottom-sheet-enter {
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0.5; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .fade-in {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Mobile App Shell Container -->
+  <div id="app" class="max-w-[480px] mx-auto min-h-screen bg-slate-50 shadow-2xl relative flex flex-col border-x border-slate-200/80">
+
+    <!-- Top App Bar -->
+    <header class="sticky top-0 z-30 bg-slate-900 text-white px-5 pt-4 pb-4 rounded-b-3xl shadow-md">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </span>
+            <h1 class="text-base font-bold tracking-tight">Daily Worker Tracker</h1>
+          </div>
+          <p id="header-user-info" class="text-xs text-slate-400 mt-0.5 truncate max-w-[230px]">Pekerja Harian • Rp150.000/hari</p>
+        </div>
+
+        <!-- Month Selector Pill -->
+        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-2xl p-1">
+          <button onclick="changeActiveMonth(-1)" aria-label="Bulan Sebelumnya" class="p-1.5 text-slate-300 hover:text-white active:scale-90 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="header-month-label" class="text-xs font-semibold px-2 min-w-[88px] text-center text-emerald-300">Nov 2026</span>
+          <button onclick="changeActiveMonth(1)" aria-label="Bulan Berikutnya" class="p-1.5 text-slate-300 hover:text-white active:scale-90 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Reminder Banner if active -->
+      <div id="reminder-banner" class="hidden mt-3 bg-amber-500/15 border border-amber-400/30 rounded-2xl px-3.5 py-2 flex items-center justify-between text-xs text-amber-200">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <span id="reminder-banner-text">Jangan lupa catat absensi hari ini!</span>
+        </div>
+        <button onclick="dismissReminderBanner()" class="text-amber-300 hover:text-white font-semibold ml-2">Tutup</button>
+      </div>
+    </header>
+
+    <!-- Main Scrollable Content -->
+    <main id="main-content" class="flex-1 px-4 pt-4 pb-28 overflow-y-auto">
+      <!-- Dynamic view rendered by JS -->
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 flex justify-around items-center shadow-[0_-4px_20px_rgba(15,23,42,0.06)]">
+      <button onclick="switchTab('dashboard')" data-tab="dashboard" class="nav-btn flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition text-emerald-600 bg-emerald-50">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <span class="text-[11px] font-semibold mt-1">Beranda</span>
+      </button>
+
+      <button onclick="switchTab('calendar')" data-tab="calendar" class="nav-btn flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition text-slate-500 hover:text-slate-800">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span class="text-[11px] font-medium mt-1">Kalender</span>
+      </button>
+
+      <button onclick="switchTab('history')" data-tab="history" class="nav-btn flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition text-slate-500 hover:text-slate-800">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        <span class="text-[11px] font-medium mt-1">Riwayat</span>
+      </button>
+
+      <button onclick="switchTab('report')" data-tab="report" class="nav-btn flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition text-slate-500 hover:text-slate-800">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span class="text-[11px] font-medium mt-1">Laporan</span>
+      </button>
+
+      <button onclick="switchTab('settings')" data-tab="settings" class="nav-btn flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition text-slate-500 hover:text-slate-800">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="text-[11px] font-medium mt-1">Setelan</span>
+      </button>
+    </nav>
+
+    <!-- Edit/Add Attendance Bottom Sheet Modal -->
+    <div id="attendance-modal" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs">
+      <div class="w-full max-w-[480px] bg-white rounded-t-3xl p-5 shadow-2xl bottom-sheet-enter">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Catat / Edit Absensi</h3>
+            <p id="modal-date-subtitle" class="text-xs text-slate-500 mt-0.5">Jumat, 20 November 2026</p>
+          </div>
+          <button onclick="closeAttendanceModal()" class="p-2 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <input type="hidden" id="modal-date-value" />
+
+        <!-- Status Selector Cards -->
+        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Pilih Status Kehadiran</label>
+        <div class="grid grid-cols-3 gap-2.5 mb-4">
+          <button type="button" onclick="selectModalStatus('Masuk')" id="modal-status-Masuk" class="modal-status-btn flex flex-col items-center justify-center p-3 rounded-2xl border-2 border-slate-200 transition">
+            <span class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-1.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <span class="text-xs font-bold">Masuk</span>
+            <span id="modal-wage-preview" class="text-[10px] text-emerald-600 font-medium mt-0.5">+Rp150rb</span>
+          </button>
+
+          <button type="button" onclick="selectModalStatus('Libur')" id="modal-status-Libur" class="modal-status-btn flex flex-col items-center justify-center p-3 rounded-2xl border-2 border-slate-200 transition">
+            <span class="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-1.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/></svg>
+            </span>
+            <span class="text-xs font-bold">Libur</span>
+            <span class="text-[10px] text-amber-600 font-medium mt-0.5">Rp0 (Tercatat)</span>
+          </button>
+
+          <button type="button" onclick="selectModalStatus('Belum Ada Info')" id="modal-status-Belum" class="modal-status-btn flex flex-col items-center justify-center p-3 rounded-2xl border-2 border-slate-200 transition">
+            <span class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mb-1.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+            <span class="text-xs font-bold text-center leading-tight">Belum Info</span>
+            <span class="text-[10px] text-slate-400 font-medium mt-0.5">Tidak dihitung</span>
+          </button>
+        </div>
+
+        <!-- Optional Note -->
+        <div class="mb-5">
+          <label for="modal-note-input" class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Catatan Shift / Lokasi (Opsional)</label>
+          <input type="text" id="modal-note-input" placeholder="Contoh: Shift Pagi Gudang A, Bongkar Muat..." class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition" />
+        </div>
+
+        <button onclick="saveAttendanceFromModal()" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-semibold text-sm rounded-2xl shadow-lg transition">
+          Simpan Perubahan
+        </button>
+      </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div class="w-full max-w-[360px] bg-white rounded-3xl p-5 shadow-2xl fade-in">
+        <div class="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <h3 id="confirm-title" class="text-base font-bold text-slate-900">Konfirmasi</h3>
+        <p id="confirm-message" class="text-xs text-slate-600 mt-1.5 leading-relaxed">Apakah Anda yakin?</p>
+        <div class="grid grid-cols-2 gap-2.5 mt-5">
+          <button onclick="closeConfirmModal()" class="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+            Batal
+          </button>
+          <button id="confirm-yes-btn" class="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-md transition">
+            Ya, Lanjutkan
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Banner (Replaces window.alert) -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2">
+      <div id="toast-box" class="bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700">
+        <span id="toast-icon" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span id="toast-text">Tersimpan</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // STATE MANAGEMENT & LOCAL STORAGE PERSISTENCE
+    // =========================================================================
+    const STORAGE_KEY = 'daily_worker_tracker_v1';
+
+    const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const MONTHS_ID = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const MONTHS_SHORT_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+    const DEFAULT_STATE = {
+      settings: {
+        workerName: 'Budi Santoso',
+        workerRole: 'Daily Worker / Helper Gudang',
+        dailyWage: 150000,
+        autoSundayOff: true,
+        payPeriodType: 'calendar', // 'calendar' (1-akhir bulan) or 'cutoff' (26-25)
+        cutoffStartDay: 26,
+        reminderEnabled: true,
+        reminderTime: '17:00',
+      },
+      // Key: 'YYYY-MM-DD' -> { status: 'Masuk' | 'Libur' | 'Belum Ada Info', note: string, updatedAt: string }
+      records: {},
+    };
+
+    let appState = loadState();
+    let currentTab = 'dashboard';
+    let selectedModalStatus = 'Masuk';
+    let historyFilterStatus = 'ALL';
+    let historySearchQuery = '';
+    let reminderDismissedToday = false;
+
+    // Active viewed year & month (defaults to current device month)
+    const now = new Date();
+    let activeYear = now.getFullYear();
+    let activeMonth = now.getMonth(); // 0-indexed
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          const initial = JSON.parse(JSON.stringify(DEFAULT_STATE));
+          saveStateToStorage(initial);
+          return initial;
+        }
+        const parsed = JSON.parse(raw);
+        return {
+          settings: { ...DEFAULT_STATE.settings, ...(parsed.settings || {}) },
+          records: parsed.records || {},
+        };
+      } catch (e) {
+        console.error('Gagal memuat data:', e);
+        return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      }
+    }
+
+    function saveStateToStorage(stateObj = appState) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateObj));
+      } catch (e) {
+        showToast('Gagal menyimpan ke penyimpanan lokal', 'error');
+      }
+    }
+
+    // =========================================================================
+    // DATE & BUSINESS LOGIC HELPERS
+    // =========================================================================
+    function toDateStr(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseDateStr(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function formatDateIndo(dateStr, includeDay = true) {
+      const d = parseDateStr(dateStr);
+      const dayName = DAYS_ID[d.getDay()];
+      const dayNum = d.getDate();
+      const monthName = MONTHS_ID[d.getMonth()];
+      const year = d.getFullYear();
+      return includeDay ? `${dayName}, ${dayNum} ${monthName} ${year}` : `${dayNum} ${monthName} ${year}`;
+    }
+
+    function formatRupiah(amount) {
+      return 'Rp' + Number(amount || 0).toLocaleString('id-ID');
+    }
+
+    /**
+     * Mendapatkan status efektif untuk tanggal tertentu:
+     * 1. Jika user sudah mencatat tanggal tersebut, gunakan catatan user.
+     * 2. Jika belum dicatat DAN hari Minggu serta autoSundayOff aktif -> 'Libur' (otomatis).
+     * 3. Selain itu -> 'Belum Ada Info'.
+     */
+    function getEffectiveRecord(dateStr) {
+      const saved = appState.records[dateStr];
+      if (saved) {
+        return {
+          status: saved.status,
+          note: saved.note || '',
+          isAutoSunday: false,
+          isSaved: true,
+        };
+      }
+      const dateObj = parseDateStr(dateStr);
+      if (appState.settings.autoSundayOff && dateObj.getDay() === 0) {
+        return {
+          status: 'Libur',
+          note: 'Libur otomatis hari Minggu',
+          isAutoSunday: true,
+          isSaved: false,
+        };
+      }
+      return {
+        status: 'Belum Ada Info',
+        note: '',
+        isAutoSunday: false,
+        isSaved: false,
+      };
+    }
+
+    /**
+     * Menentukan jadwal besok (Masuk / Libur) berdasarkan catatan besok atau aturan hari Minggu.
+     */
+    function getTomorrowSchedule() {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = toDateStr(tomorrow);
+      const saved = appState.records[tomorrowStr];
+
+      if (saved && saved.status !== 'Belum Ada Info') {
+        return {
+          dateStr: tomorrowStr,
+          status: saved.status,
+          reason: 'Sesuai jadwal yang Anda atur',
+        };
+      }
+      if (appState.settings.autoSundayOff && tomorrow.getDay() === 0) {
+        return {
+          dateStr: tomorrowStr,
+          status: 'Libur',
+          reason: 'Otomatis libur (Hari Minggu)',
+        };
+      }
+      return {
+        dateStr: tomorrowStr,
+        status: 'Masuk',
+        reason: 'Jadwal kerja reguler',
+      };
+    }
+
+    /**
+     * Mendapatkan daftar tanggal (YYYY-MM-DD) dalam periode bulan aktif
+     * Mendukung Periode Kalender (1 - akhir bulan) maupun Periode Cut-Off (misal 26 - 25).
+     */
+    function getPeriodDates(year, month) {
+      const dates = [];
+      if (appState.settings.payPeriodType === 'cutoff') {
+        const startDay = Number(appState.settings.cutoffStartDay) || 26;
+        // Mulai dari startDay bulan sebelumnya sampai (startDay - 1) bulan aktif
+        const startDate = new Date(year, month - 1, startDay);
+        const endDate = new Date(year, month, startDay - 1);
+        const cursor = new Date(startDate);
+        while (cursor <= endDate) {
+          dates.push(toDateStr(cursor));
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      } else {
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          dates.push(toDateStr(new Date(year, month, d)));
+        }
+      }
+      return dates;
+    }
+
+    /**
+     * Menghitung ringkasan absensi dan gaji untuk periode aktif.
+     */
+    function calculatePeriodSummary(year, month) {
+      const dates = getPeriodDates(year, month);
+      const todayStr = toDateStr(new Date());
+      let totalMasuk = 0;
+      let totalLibur = 0;
+      let totalBelumInfo = 0;
+      const dailyRows = [];
+
+      dates.forEach((dateStr) => {
+        const dateObj = parseDateStr(dateStr);
+        const saved = appState.records[dateStr];
+        let effectiveStatus = 'Belum Ada Info';
+        let note = '';
+        let isAutoSunday = false;
+
+        if (saved) {
+          effectiveStatus = saved.status;
+          note = saved.note || '';
+        } else if (
+          appState.settings.autoSundayOff &&
+          dateObj.getDay() === 0 &&
+          dateStr <= todayStr
+        ) {
+          // Hari Minggu yang sudah lewat/hari ini otomatis terhitung sebagai Libur
+          effectiveStatus = 'Libur';
+          note = 'Libur otomatis (Minggu)';
+          isAutoSunday = true;
+        }
+
+        const wage = effectiveStatus === 'Masuk' ? Number(appState.settings.dailyWage) : 0;
+
+        if (effectiveStatus === 'Masuk') totalMasuk++;
+        else if (effectiveStatus === 'Libur') totalLibur++;
+        else totalBelumInfo++;
+
+        dailyRows.push({
+          dateStr,
+          dayName: DAYS_ID[dateObj.getDay()],
+          status: effectiveStatus,
+          note,
+          wage,
+          isAutoSunday,
+          isSaved: Boolean(saved),
+        });
+      });
+
+      const totalTercatat = totalMasuk + totalLibur;
+      const estimasiGaji = totalMasuk * Number(appState.settings.dailyWage);
+
+      return {
+        dates,
+        startDateStr: dates[0],
+        endDateStr: dates[dates.length - 1],
+        totalTercatat,
+        totalMasuk,
+        totalLibur,
+        totalBelumInfo,
+        estimasiGaji,
+        dailyRows,
+      };
+    }
+
+    // =========================================================================
+    // NAVIGATION & HEADER UPDATES
+    // =========================================================================
+    function updateHeader() {
+      const name = appState.settings.workerName || 'Pekerja Harian';
+      const wage = formatRupiah(appState.settings.dailyWage);
+      document.getElementById('header-user-info').textContent = `${name} • ${wage}/hari`;
+      document.getElementById('header-month-label').textContent = `${MONTHS_SHORT_ID[activeMonth]} ${activeYear}`;
+
+      // Reminder check
+      const todayStr = toDateStr(new Date());
+      const todayRec = appState.records[todayStr];
+      const banner = document.getElementById('reminder-banner');
+      if (
+        appState.settings.reminderEnabled &&
+        !reminderDismissedToday &&
+        (!todayRec || todayRec.status === 'Belum Ada Info')
+      ) {
+        banner.classList.remove('hidden');
+        document.getElementById('reminder-banner-text').textContent =
+          `Absensi hari ini belum dicatat (Pengingat ${appState.settings.reminderTime})`;
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function dismissReminderBanner() {
+      reminderDismissedToday = true;
+      document.getElementById('reminder-banner').classList.add('hidden');
+    }
+
+    function changeActiveMonth(delta) {
+      activeMonth += delta;
+      if (activeMonth < 0) {
+        activeMonth = 11;
+        activeYear--;
+      } else if (activeMonth > 11) {
+        activeMonth = 0;
+        activeYear++;
+      }
+      renderCurrentTab();
+    }
+
+    function switchTab(tabName) {
+      currentTab = tabName;
+      document.querySelectorAll('.nav-btn').forEach((btn) => {
+        const isTarget = btn.getAttribute('data-tab') === tabName;
+        if (isTarget) {
+          btn.classList.add('text-emerald-600', 'bg-emerald-50');
+          btn.classList.remove('text-slate-500');
+          btn.querySelector('span').classList.replace('font-medium', 'font-semibold');
+        } else {
+          btn.classList.remove('text-emerald-600', 'bg-emerald-50');
+          btn.classList.add('text-slate-500');
+          btn.querySelector('span').classList.replace('font-semibold', 'font-medium');
+        }
+      });
+      renderCurrentTab();
+    }
+
+    function renderCurrentTab() {
+      updateHeader();
+      const container = document.getElementById('main-content');
+      if (currentTab === 'dashboard') container.innerHTML = renderDashboardView();
+      else if (currentTab === 'calendar') container.innerHTML = renderCalendarView();
+      else if (currentTab === 'history') container.innerHTML = renderHistoryView();
+      else if (currentTab === 'report') container.innerHTML = renderReportView();
+      else if (currentTab === 'settings') container.innerHTML = renderSettingsView();
+    }
+
+    // =========================================================================
+    // VIEW 1: DASHBOARD (BERANDA)
+    // =========================================================================
+    function renderDashboardView() {
+      const summary = calculatePeriodSummary(activeYear, activeMonth);
+      const todayStr = toDateStr(new Date());
+      const todayEffective = getEffectiveRecord(todayStr);
+      const tomorrow = getTomorrowSchedule();
+
+      const periodLabel = appState.settings.payPeriodType === 'cutoff'
+        ? `${formatDateIndo(summary.startDateStr, false)} - ${formatDateIndo(summary.endDateStr, false)}`
+        : `${MONTHS_ID[activeMonth]} ${activeYear}`;
+
+      return `
+        <div class="space-y-4 fade-in">
+          <!-- Estimasi Gaji Hero Card -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-36 h-36 bg-emerald-500/15 rounded-full blur-2xl"></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-emerald-300 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-400/20">
+                Periode: ${periodLabel}
+              </span>
+              <span class="text-xs text-slate-300 font-medium">${formatRupiah(appState.settings.dailyWage)}/hari</span>
+            </div>
+
+            <div class="mt-4">
+              <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Estimasi Gaji Bulan Ini</p>
+              <h2 class="text-3xl font-extrabold tracking-tight mt-1 text-white">${formatRupiah(summary.estimasiGaji)}</h2>
+              <p class="text-xs text-slate-300 mt-1.5 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                Dihitung dari <strong class="text-white">${summary.totalMasuk} hari masuk</strong> kerja
+              </p>
+            </div>
+
+            <!-- 3 Summary Mini Stats -->
+            <div class="grid grid-cols-3 gap-2.5 mt-5 pt-4 border-t border-white/10">
+              <div class="bg-white/5 rounded-2xl p-2.5 text-center">
+                <p class="text-[11px] text-slate-400">Hari Tercatat</p>
+                <p class="text-lg font-bold text-white mt-0.5">${summary.totalTercatat}</p>
+              </div>
+              <div class="bg-emerald-500/15 rounded-2xl p-2.5 text-center border border-emerald-400/20">
+                <p class="text-[11px] text-emerald-300">Total Masuk</p>
+                <p class="text-lg font-bold text-emerald-400 mt-0.5">${summary.totalMasuk}</p>
+              </div>
+              <div class="bg-amber-500/15 rounded-2xl p-2.5 text-center border border-amber-400/20">
+                <p class="text-[11px] text-amber-300">Total Libur</p>
+                <p class="text-lg font-bold text-amber-400 mt-0.5">${summary.totalLibur}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Attendance Today Card -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Absensi Hari Ini</span>
+                <h3 class="text-sm font-bold text-slate-900">${formatDateIndo(todayStr)}</h3>
+              </div>
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusBadgeClass(todayEffective.status)}">
+                ${todayEffective.status}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="quickSetAttendance('${todayStr}', 'Masuk')"
+                class="py-2.5 px-2 rounded-2xl text-xs font-bold flex flex-col items-center justify-center gap-1 border-2 transition active:scale-95 ${
+                  todayEffective.status === 'Masuk'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20'
+                    : 'bg-emerald-50/60 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                }">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                <span>Masuk</span>
+              </button>
+
+              <button onclick="quickSetAttendance('${todayStr}', 'Libur')"
+                class="py-2.5 px-2 rounded-2xl text-xs font-bold flex flex-col items-center justify-center gap-1 border-2 transition active:scale-95 ${
+                  todayEffective.status === 'Libur'
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20'
+                    : 'bg-amber-50/60 text-amber-700 border-amber-200 hover:bg-amber-100'
+                }">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/></svg>
+                <span>Libur</span>
+              </button>
+
+              <button onclick="quickSetAttendance('${todayStr}', 'Belum Ada Info')"
+                class="py-2.5 px-2 rounded-2xl text-xs font-bold flex flex-col items-center justify-center gap-1 border-2 transition active:scale-95 ${
+                  todayEffective.status === 'Belum Ada Info'
+                    ? 'bg-slate-700 text-white border-slate-700 shadow-md'
+                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                }">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Belum Info</span>
+              </button>
+            </div>
+
+            <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+              <span class="text-xs text-slate-500 truncate max-w-[230px]">
+                ${todayEffective.note ? `Catatan: "${todayEffective.note}"` : 'Tambah catatan shift atau lokasi kerja'}
+              </span>
+              <button onclick="openAttendanceModal('${todayStr}')" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                + Catatan
+              </button>
+            </div>
+          </div>
+
+          <!-- Automatic Schedule Tomorrow Card -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-2xl flex items-center justify-center ${
+                tomorrow.status === 'Masuk' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+              }">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-slate-900">Jadwal Besok</span>
+                  <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    tomorrow.status === 'Masuk' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }">${tomorrow.status}</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">${formatDateIndo(tomorrow.dateStr)}</p>
+                <p class="text-[11px] text-slate-400">${tomorrow.reason}</p>
+              </div>
+            </div>
+            <button onclick="openAttendanceModal('${tomorrow.dateStr}')" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition">
+              Ubah
+            </button>
+          </div>
+
+          <!-- Recent Activity Preview -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-slate-900">Catatan Terbaru</h3>
+              <button onclick="switchTab('history')" class="text-xs font-semibold text-emerald-600 hover:underline">Lihat Semua</button>
+            </div>
+            ${renderRecentListSnippet(summary.dailyRows)}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRecentListSnippet(dailyRows) {
+      const recorded = dailyRows
+        .filter((r) => r.status !== 'Belum Ada Info')
+        .slice()
+        .reverse()
+        .slice(0, 4);
+
+      if (recorded.length === 0) {
+        return `
+          <div class="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <p class="text-xs text-slate-500">Belum ada catatan absensi pada periode ini.</p>
+            <button onclick="openAttendanceModal('${toDateStr(new Date())}')" class="mt-2 text-xs font-semibold text-emerald-600 hover:underline">
+              + Catat Absensi Sekarang
+            </button>
+          </div>
+        `;
+      }
+
+      return `<div class="space-y-2">` + recorded.map((item) => `
+        <div onclick="openAttendanceModal('${item.dateStr}')" class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 cursor-pointer transition">
+          <div class="flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full ${item.status === 'Masuk' ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+            <div>
+              <p class="text-xs font-bold text-slate-800">${formatDateIndo(item.dateStr)}</p>
+              <p class="text-[11px] text-slate-500">${item.note || (item.status === 'Masuk' ? 'Hadir bekerja' : 'Hari libur')}</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-xs font-bold ${item.status === 'Masuk' ? 'text-emerald-600' : 'text-amber-600'}">
+              ${item.status === 'Masuk' ? formatRupiah(item.wage) : 'Libur'}
+            </span>
+          </div>
+        </div>
+      `).join('') + `</div>`;
+    }
+
+    // =========================================================================
+    // VIEW 2: KALENDER ABSENSI BULANAN
+    // =========================================================================
+    function renderCalendarView() {
+      const firstDayOfMonth = new Date(activeYear, activeMonth, 1).getDay(); // 0 (Min) - 6 (Sab)
+      const daysInMonth = new Date(activeYear, activeMonth + 1, 0).getDate();
+      const todayStr = toDateStr(new Date());
+      const summary = calculatePeriodSummary(activeYear, activeMonth);
+
+      let cellsHtml = '';
+      // Empty padding cells before day 1
+      for (let i = 0; i < firstDayOfMonth; i++) {
+        cellsHtml += `<div class="h-14 rounded-2xl bg-slate-100/50"></div>`;
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(activeYear, activeMonth, day);
+        const dateStr = toDateStr(dateObj);
+        const isSunday = dateObj.getDay() === 0;
+        const isToday = dateStr === todayStr;
+        const saved = appState.records[dateStr];
+
+        let status = 'Belum Ada Info';
+        if (saved) {
+          status = saved.status;
+        } else if (appState.settings.autoSundayOff && isSunday) {
+          status = 'Libur';
+        }
+
+        let cellBg = 'bg-white border-slate-200/80 text-slate-800';
+        let dotHtml = `<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>`;
+        let badgeText = '';
+
+        if (status === 'Masuk') {
+          cellBg = 'bg-emerald-50 border-emerald-300 text-emerald-950';
+          dotHtml = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span>`;
+          badgeText = 'Masuk';
+        } else if (status === 'Libur') {
+          cellBg = 'bg-amber-50 border-amber-300 text-amber-950';
+          dotHtml = `<span class="w-2 h-2 rounded-full bg-amber-500"></span>`;
+          badgeText = 'Libur';
+        }
+
+        const todayRing = isToday ? 'ring-2 ring-slate-900 ring-offset-1' : '';
+
+        cellsHtml += `
+          <button onclick="openAttendanceModal('${dateStr}')"
+            class="h-14 rounded-2xl border ${cellBg} ${todayRing} flex flex-col items-center justify-between p-1.5 active:scale-95 transition relative">
+            <span class="text-xs font-bold ${isSunday && status !== 'Masuk' ? 'text-rose-600' : ''}">${day}</span>
+            ${dotHtml}
+            <span class="text-[9px] font-semibold leading-none truncate max-w-full ${
+              status === 'Masuk' ? 'text-emerald-700' : status === 'Libur' ? 'text-amber-700' : 'text-slate-400'
+            }">${badgeText || '-'}</span>
+          </button>
+        `;
+      }
+
+      return `
+        <div class="space-y-4 fade-in">
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-base font-bold text-slate-900">Kalender ${MONTHS_ID[activeMonth]} ${activeYear}</h2>
+                <p class="text-xs text-slate-500">Ketuk tanggal untuk mengubah status absensi</p>
+              </div>
+              <button onclick="jumpToToday()" class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700">
+                Hari Ini
+              </button>
+            </div>
+
+            <!-- Legend -->
+            <div class="flex items-center justify-around bg-slate-50 py-2 px-3 rounded-2xl mb-3 text-[11px] font-medium text-slate-600">
+              <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>Masuk (${summary.totalMasuk})</div>
+              <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>Libur (${summary.totalLibur})</div>
+              <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>Belum Info</div>
+            </div>
+
+            <!-- Weekday Header -->
+            <div class="grid grid-cols-7 gap-1.5 text-center mb-1.5">
+              <span class="text-[11px] font-bold text-rose-500">Min</span>
+              <span class="text-[11px] font-bold text-slate-500">Sen</span>
+              <span class="text-[11px] font-bold text-slate-500">Sel</span>
+              <span class="text-[11px] font-bold text-slate-500">Rab</span>
+              <span class="text-[11px] font-bold text-slate-500">Kam</span>
+              <span class="text-[11px] font-bold text-slate-500">Jum</span>
+              <span class="text-[11px] font-bold text-slate-500">Sab</span>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="grid grid-cols-7 gap-1.5">
+              ${cellsHtml}
+            </div>
+          </div>
+
+          <!-- Info Rule Box -->
+          <div class="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-blue-900">
+            <svg class="w-4 h-4 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p>Setiap hari <strong>Minggu</strong> otomatis diatur sebagai <strong>Libur</strong>. Jika Anda lembur/masuk di hari Minggu, cukup ketuk tanggalnya dan pilih <strong>Masuk</strong>.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function jumpToToday() {
+      const d = new Date();
+      activeYear = d.getFullYear();
+      activeMonth = d.getMonth();
+      renderCurrentTab();
+    }
+
+    // =========================================================================
+    // VIEW 3: RIWAYAT ABSENSI (EDITABLE)
+    // =========================================================================
+    function renderHistoryView() {
+      const summary = calculatePeriodSummary(activeYear, activeMonth);
+      let rows = summary.dailyRows.slice().reverse();
+
+      if (historyFilterStatus !== 'ALL') {
+        rows = rows.filter((r) => r.status === historyFilterStatus);
+      }
+      if (historySearchQuery.trim() !== '') {
+        const q = historySearchQuery.toLowerCase();
+        rows = rows.filter(
+          (r) =>
+            formatDateIndo(r.dateStr).toLowerCase().includes(q) ||
+            r.note.toLowerCase().includes(q) ||
+            r.status.toLowerCase().includes(q)
+        );
+      }
+
+      return `
+        <div class="space-y-3.5 fade-in">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Riwayat Absensi</h2>
+              <p class="text-xs text-slate-500">Ketuk baris mana saja untuk mengedit status</p>
+            </div>
+            <button onclick="openAttendanceModal('${toDateStr(new Date())}')" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition">
+              + Catat
+            </button>
+          </div>
+
+          <!-- Search & Filter Bar -->
+          <div class="bg-white p-3 rounded-2xl border border-slate-200/80 space-y-2.5">
+            <input type="text" value="${historySearchQuery}" oninput="onHistorySearch(this.value)"
+              placeholder="Cari tanggal atau catatan..."
+              class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+
+            <div class="flex gap-1.5 overflow-x-auto pb-0.5">
+              ${['ALL', 'Masuk', 'Libur', 'Belum Ada Info'].map((st) => `
+                <button onclick="setHistoryFilter('${st}')"
+                  class="px-3 py-1.5 rounded-xl text-[11px] font-semibold whitespace-nowrap transition ${
+                    historyFilterStatus === st
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }">
+                  ${st === 'ALL' ? 'Semua Hari' : st}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- List of Dates -->
+          <div class="space-y-2">
+            ${rows.map((item) => `
+              <div onclick="openAttendanceModal('${item.dateStr}')"
+                class="bg-white p-3.5 rounded-2xl border border-slate-200/80 hover:border-emerald-400 cursor-pointer transition flex items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <div class="w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 font-bold ${
+                    item.status === 'Masuk'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : item.status === 'Libur'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-slate-100 text-slate-500'
+                  }">
+                    <span class="text-sm leading-none">${item.dateStr.split('-')[2]}</span>
+                    <span class="text-[9px] uppercase mt-0.5">${item.dayName.slice(0, 3)}</span>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold text-slate-900">${formatDateIndo(item.dateStr)}</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                      ${item.note ? item.note : item.status === 'Masuk' ? 'Masuk kerja penuh' : item.status === 'Libur' ? 'Tidak masuk / libur' : 'Belum ada keterangan'}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="text-right shrink-0 ml-2">
+                  <span class="inline-block text-[10px] font-bold px-2.5 py-1 rounded-full ${getStatusBadgeClass(item.status)}">
+                    ${item.status}
+                  </span>
+                  <p class="text-xs font-bold mt-1 ${item.status === 'Masuk' ? 'text-emerald-600' : 'text-slate-400'}">
+                    ${item.status === 'Masuk' ? formatRupiah(item.wage) : 'Rp0'}
+                  </p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function setHistoryFilter(status) {
+      historyFilterStatus = status;
+      renderCurrentTab();
+    }
+
+    function onHistorySearch(val) {
+      historySearchQuery = val;
+      renderCurrentTab();
+    }
+
+    // =========================================================================
+    // VIEW 4: REKAP & LAPORAN BULANAN (PDF & EXCEL EXPORT)
+    // =========================================================================
+    function renderReportView() {
+      const summary = calculatePeriodSummary(activeYear, activeMonth);
+      const recordedRows = summary.dailyRows.filter((r) => r.status !== 'Belum Ada Info');
+
+      return `
+        <div class="space-y-4 fade-in">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Rekap & Laporan Gaji</h2>
+            <p class="text-xs text-slate-500">Periode ${formatDateIndo(summary.startDateStr, false)} s/d ${formatDateIndo(summary.endDateStr, false)}</p>
+          </div>
+
+          <!-- Slip Gaji Summary Card -->
+          <div class="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/80 space-y-3">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <p class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Nama Pekerja</p>
+                <p class="text-sm font-bold text-slate-900">${appState.settings.workerName}</p>
+                <p class="text-xs text-slate-500">${appState.settings.workerRole}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-[11px] uppercase tracking-wider font-bold text-slate-400">Upah Harian</p>
+                <p class="text-sm font-bold text-emerald-600">${formatRupiah(appState.settings.dailyWage)}</p>
+              </div>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between py-1">
+                <span class="text-slate-600">Total Hari Tercatat</span>
+                <span class="font-bold text-slate-900">${summary.totalTercatat} Hari</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-600">Total Hari Masuk (Dibayar)</span>
+                <span class="font-bold text-emerald-600">${summary.totalMasuk} Hari</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-600">Total Hari Libur (Rp0)</span>
+                <span class="font-bold text-amber-600">${summary.totalLibur} Hari</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-600">Belum Ada Info (Tidak Dihitung)</span>
+                <span class="font-medium text-slate-400">${summary.totalBelumInfo} Hari</span>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-dashed border-slate-200 flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Total Gaji Diterima</span>
+              <span class="text-xl font-extrabold text-emerald-600">${formatRupiah(summary.estimasiGaji)}</span>
+            </div>
+          </div>
+
+          <!-- Export Buttons (PDF & Excel) -->
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="exportToExcel()" class="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span>Ekspor Excel</span>
+            </button>
+
+            <button onclick="exportToPDF()" class="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+              <span>Ekspor PDF</span>
+            </button>
+          </div>
+
+          <!-- Detailed Table Preview -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Rincian Hari Tercatat (${recordedRows.length} Hari)</h3>
+            ${
+              recordedRows.length === 0
+                ? `<p class="text-xs text-slate-400 text-center py-6">Belum ada data tercatat untuk diekspor pada periode ini.</p>`
+                : `
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="border-b border-slate-200 text-[11px] text-slate-500">
+                        <th class="py-2 pr-2">Tanggal</th>
+                        <th class="py-2 px-2">Status</th>
+                        <th class="py-2 pl-2 text-right">Upah</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      ${recordedRows.map((r) => `
+                        <tr>
+                          <td class="py-2.5 pr-2">
+                            <div class="font-semibold text-slate-800">${r.dateStr} (${r.dayName.slice(0,3)})</div>
+                            ${r.note ? `<div class="text-[10px] text-slate-400 truncate max-w-[150px]">${r.note}</div>` : ''}
+                          </td>
+                          <td class="py-2.5 px-2">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusBadgeClass(r.status)}">${r.status}</span>
+                          </td>
+                          <td class="py-2.5 pl-2 text-right font-bold ${r.status === 'Masuk' ? 'text-emerald-600' : 'text-slate-400'}">
+                            ${formatRupiah(r.wage)}
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `
+            }
+          </div>
+        </div>
+      `;
+    }
+
+    function exportToExcel() {
+      try {
+        const summary = calculatePeriodSummary(activeYear, activeMonth);
+        const monthTitle = `${MONTHS_ID[activeMonth]}_${activeYear}`;
+
+        const rows = [
+          ['LAPORAN ABSENSI & GAJI DAILY WORKER'],
+          ['Nama Pekerja', appState.settings.workerName],
+          ['Posisi / Bagian', appState.settings.workerRole],
+          ['Periode', `${summary.startDateStr} s/d ${summary.endDateStr}`],
+          ['Upah Harian', Number(appState.settings.dailyWage)],
+          [],
+          ['Tanggal', 'Hari', 'Status', 'Catatan', 'Upah (IDR)'],
+        ];
+
+        summary.dailyRows.forEach((r) => {
+          rows.push([r.dateStr, r.dayName, r.status, r.note || '-', r.wage]);
+        });
+
+        rows.push([]);
+        rows.push(['RINGKASAN BULANAN']);
+        rows.push(['Total Hari Tercatat', summary.totalTercatat]);
+        rows.push(['Total Hari Masuk', summary.totalMasuk]);
+        rows.push(['Total Hari Libur', summary.totalLibur]);
+        rows.push(['Total Gaji Diterima (IDR)', summary.estimasiGaji]);
+
+        if (typeof XLSX !== 'undefined') {
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.aoa_to_sheet(rows);
+          ws['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 28 }, { wch: 16 }];
+          XLSX.utils.book_append_sheet(wb, ws, 'Laporan Gaji');
+          XLSX.writeFile(wb, `Daily_Worker_Report_${monthTitle}.xlsx`);
+          showToast('File Excel (.xlsx) berhasil diunduh!');
+        } else {
+          // Fallback CSV
+          const csvContent = rows.map((e) => e.join(',')).join('\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `Daily_Worker_Report_${monthTitle}.csv`;
+          link.click();
+          showToast('File CSV berhasil diunduh!');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Gagal mengekspor Excel', 'error');
+      }
+    }
+
+    function exportToPDF() {
+      try {
+        if (!window.jspdf) {
+          showToast('Library PDF belum siap, coba lagi', 'error');
+          return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const summary = calculatePeriodSummary(activeYear, activeMonth);
+        const monthTitle = `${MONTHS_ID[activeMonth]} ${activeYear}`;
+
+        // Header
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, 210, 34, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DAILY WORKER TRACKER', 14, 15);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Laporan Absensi & Rekap Gaji Bulanan - ${monthTitle}`, 14, 23);
+
+        // Worker Info
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(10);
+        doc.text(`Nama Pekerja : ${appState.settings.workerName}`, 14, 44);
+        doc.text(`Posisi / Divisi : ${appState.settings.workerRole}`, 14, 50);
+        doc.text(`Periode Gaji    : ${summary.startDateStr} s/d ${summary.endDateStr}`, 14, 56);
+        doc.text(`Upah Harian     : ${formatRupiah(appState.settings.dailyWage)}`, 14, 62);
+
+        // Summary Box
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(14, 68, 182, 22, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Hari Tercatat: ${summary.totalTercatat}`, 20, 77);
+        doc.text(`Masuk: ${summary.totalMasuk} Hari`, 72, 77);
+        doc.text(`Libur: ${summary.totalLibur} Hari`, 122, 77);
+        doc.setTextColor(5, 150, 105);
+        doc.setFontSize(11);
+        doc.text(`Total Gaji Diterima: ${formatRupiah(summary.estimasiGaji)}`, 20, 85);
+
+        // Table
+        const tableRows = summary.dailyRows
+          .filter((r) => r.status !== 'Belum Ada Info')
+          .map((r) => [r.dateStr, r.dayName, r.status, r.note || '-', formatRupiah(r.wage)]);
+
+        doc.autoTable({
+          startY: 96,
+          head: [['Tanggal', 'Hari', 'Status', 'Catatan', 'Upah']],
+          body: tableRows.length > 0 ? tableRows : [['-', '-', 'Belum ada data tercatat', '-', 'Rp0']],
+          theme: 'grid',
+          headStyles: { fillColor: [15, 23, 42], textColor: 255, fontSize: 9 },
+          bodyStyles: { fontSize: 8.5, textColor: 51 },
+          columnStyles: { 4: { halign: 'right', fontStyle: 'bold' } },
+        });
+
+        doc.save(`Laporan_Gaji_${MONTHS_ID[activeMonth]}_${activeYear}.pdf`);
+        showToast('Laporan PDF berhasil diunduh!');
+      } catch (err) {
+        console.error(err);
+        showToast('Gagal mengekspor PDF', 'error');
+      }
+    }
+
+    // =========================================================================
+    // VIEW 5: PENGATURAN, BACKUP & RESTORE
+    // =========================================================================
+    function renderSettingsView() {
+      const s = appState.settings;
+      return `
+        <div class="space-y-4 fade-in">
+          <h2 class="text-base font-bold text-slate-900">Pengaturan Aplikasi</h2>
+
+          <!-- Profil & Upah Card -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80 space-y-3.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-600">Profil & Upah Harian</h3>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Pekerja</label>
+              <input type="text" id="set-worker-name" value="${s.workerName}"
+                class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Posisi / Bagian Kerja</label>
+              <input type="text" id="set-worker-role" value="${s.workerRole}"
+                class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Nominal Upah Harian (IDR)</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">Rp</span>
+                <input type="number" id="set-daily-wage" value="${s.dailyWage}" min="0" step="5000"
+                  class="w-full pl-10 pr-3.5 py-2.5 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Default: Rp150.000. Perubahan otomatis memperbarui perhitungan gaji.</p>
+            </div>
+          </div>
+
+          <!-- Jadwal, Periode Gaji & Pengingat -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80 space-y-3.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-600">Jadwal & Periode Gaji</h3>
+
+            <div class="flex items-center justify-between py-1">
+              <div>
+                <p class="text-xs font-bold text-slate-800">Hari Minggu Otomatis Libur</p>
+                <p class="text-[11px] text-slate-500">Setiap Minggu default berstatus Libur</p>
+              </div>
+              <input type="checkbox" id="set-auto-sunday" ${s.autoSundayOff ? 'checked' : ''}
+                class="w-5 h-5 accent-emerald-600 rounded cursor-pointer" />
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Sistem Periode Gaji</label>
+              <select id="set-period-type" onchange="toggleCutoffInput(this.value)"
+                class="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="calendar" ${s.payPeriodType === 'calendar' ? 'selected' : ''}>Tanggal 1 - Akhir Bulan (Kalender)</option>
+                <option value="cutoff" ${s.payPeriodType === 'cutoff' ? 'selected' : ''}>Tanggal Cut-Off Bulanan (Contoh: 26 - 25)</option>
+              </select>
+            </div>
+
+            <div id="cutoff-day-wrapper" class="${s.payPeriodType === 'cutoff' ? '' : 'hidden'}">
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Mulai Cut-Off (1 - 28)</label>
+              <input type="number" id="set-cutoff-day" value="${s.cutoffStartDay}" min="1" max="28"
+                class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl" />
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <div>
+                <p class="text-xs font-bold text-slate-800">Pengingat Catat Absensi</p>
+                <p class="text-[11px] text-slate-500">Tampilkan pengingat harian</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="time" id="set-reminder-time" value="${s.reminderTime}"
+                  class="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg" />
+                <input type="checkbox" id="set-reminder-enabled" ${s.reminderEnabled ? 'checked' : ''}
+                  class="w-5 h-5 accent-emerald-600 rounded cursor-pointer" />
+              </div>
+            </div>
+
+            <button onclick="saveSettingsForm()" class="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md transition">
+              Simpan Pengaturan
+            </button>
+          </div>
+
+          <!-- Backup & Pemulihan Data -->
+          <div class="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80 space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-600">Backup & Pemulihan Data</h3>
+            <p class="text-[11px] text-slate-500 leading-relaxed">Simpan cadangan seluruh riwayat absensi ke file JSON agar aman saat ganti HP atau membersihkan browser.</p>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <button onclick="backupDataJSON()" class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Backup JSON</span>
+              </button>
+
+              <label class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                <span>Pulihkan Data</span>
+                <input type="file" accept=".json" onchange="restoreDataJSON(event)" class="hidden" />
+              </label>
+            </div>
+          </div>
+
+          <!-- Reset Bulan Aktif (Aman, tidak menghapus bulan sebelumnya) -->
+          <div class="bg-rose-50/70 rounded-3xl p-4 border border-rose-200/80 space-y-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-rose-700">Reset Periode Aktif</h3>
+            <p class="text-[11px] text-rose-800/80 leading-relaxed">
+              Menghapus catatan absensi khusus bulan <strong>${MONTHS_ID[activeMonth]} ${activeYear}</strong> saja. Riwayat bulan-bulan sebelumnya tetap tersimpan aman.
+            </p>
+            <button onclick="confirmResetCurrentMonth()" class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition">
+              Reset Data ${MONTHS_ID[activeMonth]} ${activeYear}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleCutoffInput(val) {
+      const el = document.getElementById('cutoff-day-wrapper');
+      if (val === 'cutoff') el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+
+    function saveSettingsForm() {
+      const name = document.getElementById('set-worker-name').value.trim() || 'Pekerja Harian';
+      const role = document.getElementById('set-worker-role').value.trim() || 'Daily Worker';
+      const wage = Math.max(0, Number(document.getElementById('set-daily-wage').value) || 0);
+      const autoSunday = document.getElementById('set-auto-sunday').checked;
+      const periodType = document.getElementById('set-period-type').value;
+      const cutoffDay = Math.min(28, Math.max(1, Number(document.getElementById('set-cutoff-day').value) || 26));
+      const reminderEnabled = document.getElementById('set-reminder-enabled').checked;
+      const reminderTime = document.getElementById('set-reminder-time').value || '17:00';
+
+      appState.settings = {
+        workerName: name,
+        workerRole: role,
+        dailyWage: wage,
+        autoSundayOff: autoSunday,
+        payPeriodType: periodType,
+        cutoffStartDay: cutoffDay,
+        reminderEnabled,
+        reminderTime,
+      };
+
+      saveStateToStorage();
+      renderCurrentTab();
+      showToast('Pengaturan berhasil disimpan!');
+    }
+
+    function backupDataJSON() {
+      const dataStr = JSON.stringify(appState, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Backup_DailyWorker_${toDateStr(new Date())}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('File backup JSON berhasil diunduh!');
+    }
+
+    function restoreDataJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!imported || typeof imported !== 'object' || !imported.records) {
+            throw new Error('Format file tidak valid');
+          }
+          appState = {
+            settings: { ...DEFAULT_STATE.settings, ...(imported.settings || {}) },
+            records: imported.records || {},
+          };
+          saveStateToStorage();
+          renderCurrentTab();
+          showToast('Data berhasil dipulihkan!');
+        } catch (err) {
+          showToast('File backup tidak valid atau rusak', 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function confirmResetCurrentMonth() {
+      showConfirmModal(
+        `Reset ${MONTHS_ID[activeMonth]} ${activeYear}?`,
+        `Semua catatan absensi pada periode ${MONTHS_ID[activeMonth]} ${activeYear} akan dikosongkan. Riwayat bulan lain tidak akan terhapus.`,
+        () => {
+          const periodDates = getPeriodDates(activeYear, activeMonth);
+          periodDates.forEach((dateStr) => {
+            delete appState.records[dateStr];
+          });
+          saveStateToStorage();
+          renderCurrentTab();
+          showToast(`Data ${MONTHS_ID[activeMonth]} ${activeYear} telah direset`);
+        }
+      );
+    }
+
+    // =========================================================================
+    // ATTENDANCE ACTIONS & MODAL HANDLERS
+    // =========================================================================
+    function quickSetAttendance(dateStr, status) {
+      const existingNote = appState.records[dateStr]?.note || '';
+      if (status === 'Belum Ada Info' && !existingNote) {
+        delete appState.records[dateStr];
+      } else {
+        appState.records[dateStr] = {
+          status,
+          note: existingNote,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      saveStateToStorage();
+      renderCurrentTab();
+      showToast(`Status ${formatDateIndo(dateStr, false)}: ${status}`);
+    }
+
+    function openAttendanceModal(dateStr) {
+      const modal = document.getElementById('attendance-modal');
+      const eff = getEffectiveRecord(dateStr);
+
+      document.getElementById('modal-date-value').value = dateStr;
+      document.getElementById('modal-date-subtitle').textContent = formatDateIndo(dateStr);
+      document.getElementById('modal-note-input').value = eff.isAutoSunday ? '' : eff.note;
+      document.getElementById('modal-wage-preview').textContent = `+${formatRupiah(appState.settings.dailyWage)}`;
+
+      selectModalStatus(eff.status);
+      modal.classList.remove('hidden');
+    }
+
+    function closeAttendanceModal() {
+      document.getElementById('attendance-modal').classList.add('hidden');
+    }
+
+    function selectModalStatus(status) {
+      selectedModalStatus = status;
+      document.querySelectorAll('.modal-status-btn').forEach((btn) => {
+        btn.classList.remove('border-emerald-600', 'bg-emerald-50/70', 'border-amber-500', 'bg-amber-50/70', 'border-slate-700', 'bg-slate-100');
+        btn.classList.add('border-slate-200');
+      });
+
+      if (status === 'Masuk') {
+        const el = document.getElementById('modal-status-Masuk');
+        el.classList.remove('border-slate-200');
+        el.classList.add('border-emerald-600', 'bg-emerald-50/70');
+      } else if (status === 'Libur') {
+        const el = document.getElementById('modal-status-Libur');
+        el.classList.remove('border-slate-200');
+        el.classList.add('border-amber-500', 'bg-amber-50/70');
+      } else {
+        const el = document.getElementById('modal-status-Belum');
+        el.classList.remove('border-slate-200');
+        el.classList.add('border-slate-700', 'bg-slate-100');
+      }
+    }
+
+    function saveAttendanceFromModal() {
+      const dateStr = document.getElementById('modal-date-value').value;
+      const note = document.getElementById('modal-note-input').value.trim();
+
+      appState.records[dateStr] = {
+        status: selectedModalStatus,
+        note,
+        updatedAt: new Date().toISOString(),
+      };
+
+      saveStateToStorage();
+      closeAttendanceModal();
+      renderCurrentTab();
+      showToast(`Absensi ${formatDateIndo(dateStr, false)} disimpan!`);
+    }
+
+    // =========================================================================
+    // UI UTILITIES (BADGES, TOAST, CONFIRM MODAL)
+    // =========================================================================
+    function getStatusBadgeClass(status) {
+      if (status === 'Masuk') return 'bg-emerald-100 text-emerald-700';
+      if (status === 'Libur') return 'bg-amber-100 text-amber-700';
+      return 'bg-slate-100 text-slate-600';
+    }
+
+    let toastTimeout = null;
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const text = document.getElementById('toast-text');
+
+      text.textContent = message;
+      icon.className = `w-2 h-2 rounded-full ${type === 'error' ? 'bg-rose-400' : 'bg-emerald-400'}`;
+
+      toast.classList.remove('opacity-0', '-translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', '-translate-y-2');
+      }, 2400);
+    }
+
+    let confirmCallback = null;
+    function showConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+      confirmCallback = onConfirm;
+      document.getElementById('confirm-modal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').classList.add('hidden');
+      confirmCallback = null;
+    }
+
+    document.getElementById('confirm-yes-btn').addEventListener('click', () => {
+      if (typeof confirmCallback === 'function') confirmCallback();
+      closeConfirmModal();
+    });
+
+    // Close bottom sheet when clicking backdrop
+    document.getElementById('attendance-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'attendance-modal') closeAttendanceModal();
+    });
+
+    // Initialize App on Load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCurrentTab();
+    });
+  </script>
+</body>
+</html>
